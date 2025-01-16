@@ -1,0 +1,59 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:        
+        endpoint: 0.0.0.0:4317
+      http:                  
+        endpoint: 0.0.0.0:4318
+  hostmetrics:
+    scrapers:
+      cpu:
+      # disk:
+      # filesystem:
+      # load:
+      # memory:
+      # network:
+      # process:
+      # processes:
+      # paging:
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: detailed
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+    compression: none
+  prometheus:
+    namespace: "realm"
+    endpoint: otel-collector:8889
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+  pprof:
+
+service:
+  telemetry:
+    logs:
+      level: DEBUG
+    metrics:
+      level: basic
+  extensions: [health_check, pprof]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp,debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      # exporters: [logging, prometheus]
+      exporters: [debug,prometheusremotewrite]

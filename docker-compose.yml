@@ -1,0 +1,164 @@
+services:
+  # backend:
+  #   build:
+  #     context: ./server/game
+  #     dockerfile: Dockerfile
+  #   container_name: realm-backend
+  #   environment:
+  #     PORT: ${PORT}
+  #     HOST: 0.0.0.0
+  #     DEPLOYED: 1      
+  #     DB_HOST: mysql
+  #     DB_PORT: ${MYSQL_PORT}
+  #     DB_USER: ${MYSQL_USER}
+  #     DB_PASSWORD: ${MYSQL_PASSWORD}
+  #     DB_NAME: ${MYSQL_DATABASE}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  #     OTEL_EXPORTER_HOST: "otel-collector"
+  #     OTEL_SERVICE: "realm-game"
+  #     OTEL_LOG_LEVEL: "info"
+  #   ports:
+  #     - 3001:${PORT}
+  #   depends_on:
+  #     - mysql
+  #     - redis
+  #     - otel-collector
+  # cron:
+  #   build:
+  #     context: ./server/cron
+  #     dockerfile: Dockerfile
+  #   container_name: realm-cron
+  #   environment:
+  #     PORT: ${PORT}
+  #     HOST: 0.0.0.0
+  #     DEPLOYED: 1
+  #     DB_HOST: mysql
+  #     DB_PORT: ${MYSQL_PORT}
+  #     DB_USER: ${MYSQL_USER}
+  #     DB_PASSWORD: ${MYSQL_PASSWORD}
+  #     DB_NAME: ${MYSQL_DATABASE}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  #     OTEL_EXPORTER_HOST: "otel-collector"
+  #     OTEL_SERVICE: "realm-cron"      
+  #     OTEL_LOG_LEVEL: "info"  
+  #   depends_on:
+  #     - mysql
+  #     - redis
+  #     - otel-collector
+  redis:
+    image: redis:7.2.4
+    restart: always
+    container_name: realm-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --loglevel verbose
+    volumes:
+      - redis:/data    
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: realm-grafana
+    restart: unless-stopped
+    ports:
+     - 3004:3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./grafana/data.yaml:/etc/grafana/provisioning/datasources/config.yaml
+      - ./grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - grafana:/var/lib/grafana
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib
+    container_name: realm-otel-collector
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    environment:
+      OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: delta
+    ports:
+      - 1888:1888
+      - 8888:8888
+      - 8889:8889
+      - 13133:13133
+      - 4317:4317
+      - 4318:4318
+      - 55679:55679    
+  tempo:
+    image: grafana/tempo:latest
+    container_name: realm-tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml
+      #- tempo:/tmp/tempo1
+    ports:
+      - 3200
+      - 4317
+      - 4318    
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: realm-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--enable-feature=remote-write-receiver'
+    expose:
+      - 9090:9090      
+  mysql:
+    image: mysql:5.7
+    restart: always
+    container_name: realm-sql
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - 3306:${MYSQL_PORT}
+    expose:
+      - 3306
+    volumes:
+      - mysql:/var/lib/mysql
+  ###################################
+  # For Load Testing                #
+  ###################################
+  k6:
+    image: grafana/k6:latest
+    container_name: realm-k6
+    # to get into shell for debug: "docker-compose run k6"
+    # entrypoint: /bin/sh
+    # user: root
+    ports:
+      - 6565:6565
+    environment:
+      K6_OUT: "influxdb=http://influxdb:8086/k6"
+      API_DOMAIN: "host.docker.internal:3001"
+    volumes:
+      - ./k6/scripts:/scripts
+  influxdb:  
+    image: influxdb:1.8
+    container_name: realm-influx
+    ports:
+      - 8086:8086
+    environment:
+      - INFLUXDB_DB=k6
+
+volumes:
+  mysql:
+  grafana:
+  tempo:
+  prometheus:
+  redis:

@@ -1,0 +1,9 @@
+server/go.work
+library/
+server/
+server-old/
+server3/
+test/
+.env
+.vscode/
+*.code-workspace
