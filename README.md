@@ -2,6 +2,10 @@
 
 Contains all the backend infrasture used by Pocket Realm app to run and do load testing
 
+## Status
+
+Completed
+
 ## Services
 
 * Redis - Used by Pocket Realm application for leaderboards and messaging
@@ -22,7 +26,3 @@ This will spin up all the containers used by the backend using Docker
 
 ```stop```
 Tear down all the running containers in Docker
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
