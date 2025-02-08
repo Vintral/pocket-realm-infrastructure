@@ -8,3 +8,4 @@ test/
 .vscode/
 *.code-workspace
 client*
+go.work
